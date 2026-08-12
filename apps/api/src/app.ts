@@ -6,6 +6,10 @@ import { insertDocument } from "./db.js";
 import type { KnowledgeAgent } from "./agent.js";
 import { RagService } from "./rag.js";
 
+function writeSse(res: express.Response, event: string, data: unknown) {
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
 export function createApp(db: Db, agent: KnowledgeAgent, webOrigin = "http://localhost:5173") {
   const app = express();
   app.use(cors({ origin: webOrigin }));
@@ -30,6 +34,36 @@ export function createApp(db: Db, agent: KnowledgeAgent, webOrigin = "http://loc
       const { sessionId, message } = z.object({ sessionId: z.string().min(1).max(100), message: z.string().min(1).max(4000) }).parse(req.body);
       res.json({ events: await agent.run(sessionId, message) });
     } catch (error) { next(error); }
+  });
+  app.post("/api/chat/stream", async (req, res, next) => {
+    let streaming = false;
+    try {
+      const { sessionId, message } = z.object({ sessionId: z.string().min(1).max(100), message: z.string().min(1).max(4000) }).parse(req.body);
+      res.status(200).set({
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no"
+      });
+      res.flushHeaders();
+      streaming = true;
+      const controller = new AbortController();
+      let completed = false;
+      res.on("close", () => { if (!completed) controller.abort(); });
+      const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 15_000);
+      try {
+        for await (const event of agent.stream(sessionId, message, controller.signal)) {
+          if (controller.signal.aborted) break;
+          writeSse(res, event.type, event);
+        }
+        completed = true;
+      } finally { clearInterval(heartbeat); }
+      res.end();
+    } catch (error) {
+      if (!streaming) return next(error);
+      writeSse(res, "error", { type: "error", message: error instanceof Error ? error.message : "流式生成失败" });
+      res.end();
+    }
   });
   app.get("/api/metrics", (_req, res) => {
     res.json({ ...agent.metrics(), documents: db.documents.length, chunks: db.chunks.length });

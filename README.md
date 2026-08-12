@@ -16,6 +16,7 @@ React 工作台 ── REST API ── Knowledge Agent
 - **全栈交付**：React + TypeScript + Vite 前端，Express + Zod 后端，SQLite 关系型数据层。
 - **RAG**：中文字符与英文词元混合检索、相关度打分、Top-K 召回、引用溯源。
 - **Agent**：显式规划、工具调用、会话记忆与回答合成；接口设计可继续扩展多工具节点。
+- **流式交互**：SSE 按 `plan → tool → delta → done` 实时推送，支持心跳、断连取消、引用与最终 Trace 落库。
 - **工程能力**：Monorepo、严格类型检查、参数校验、统一异常处理、事务与 WAL、TTL 缓存、单元测试。
 - **可观测性**：每次调用记录 Query、Latency、Tool Calls，并在 Dashboard 展示。
 - **模型可替换**：通过 Adapter 接入 OpenAI、DeepSeek、Qwen 等兼容 Chat Completions 的服务。
@@ -58,6 +59,7 @@ pnpm build      # 生产构建
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `POST` | `/api/chat` | 执行 Agent 并返回 plan/tool/answer 事件 |
+| `POST` | `/api/chat/stream` | 通过 SSE 流式返回 plan/tool/delta/done 事件 |
 | `GET/POST` | `/api/documents` | 查询或写入知识文档 |
 | `GET` | `/api/search?q=` | 独立验证 RAG 检索结果 |
 | `GET` | `/api/traces` | 最近 20 条调用链路 |

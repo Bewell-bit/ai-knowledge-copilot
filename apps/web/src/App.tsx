@@ -3,7 +3,7 @@ import { Activity, BookOpen, Bot, BrainCircuit, Check, ChevronRight, Database, F
 import { api, type AgentEvent, type Document, type Metrics, type Trace } from "./api";
 
 type Page = "chat" | "knowledge" | "observability";
-type Conversation = { role: "user" | "assistant"; content: string; events?: AgentEvent[] };
+type Conversation = { id: string; role: "user" | "assistant"; content: string; events?: AgentEvent[]; streaming?: boolean };
 const prompts = ["退款超过一千元应该如何处理？", "年度会员有哪些权益？", "AI 助手有哪些安全红线？"];
 const sessionId = crypto.randomUUID();
 
@@ -34,15 +34,26 @@ function Chat() {
   const [loading, setLoading] = useState(false);
   async function send(text = input) {
     if (!text.trim() || loading) return;
-    setInput(""); setLoading(true); setMessages((old) => [...old, { role: "user", content: text }]);
-    try { const data = await api.chat(sessionId, text); const answer = data.events.find((e) => e.type === "answer"); setMessages((old) => [...old, { role: "assistant", content: answer?.type === "answer" ? answer.content : "未生成回答", events: data.events }]); }
-    catch (e) { setMessages((old) => [...old, { role: "assistant", content: e instanceof Error ? e.message : "服务异常" }]); }
+    const assistantId = crypto.randomUUID();
+    setInput(""); setLoading(true); setMessages((old) => [...old,
+      { id: crypto.randomUUID(), role: "user", content: text },
+      { id: assistantId, role: "assistant", content: "", events: [], streaming: true }
+    ]);
+    const updateAssistant = (update: (message: Conversation) => Conversation) => setMessages((old) => old.map((message) => message.id === assistantId ? update(message) : message));
+    try {
+      await api.streamChat(sessionId, text, (event) => {
+        if (event.type === "plan" || event.type === "tool") updateAssistant((message) => ({ ...message, events: [...(message.events ?? []), event] }));
+        if (event.type === "delta") updateAssistant((message) => ({ ...message, content: message.content + event.content }));
+        if (event.type === "done") updateAssistant((message) => ({ ...message, content: event.content, streaming: false, events: [...(message.events ?? []), { type: "answer", content: event.content, citations: event.citations, latencyMs: event.latencyMs }] }));
+      });
+    }
+    catch (e) { updateAssistant((message) => ({ ...message, streaming: false, content: message.content || (e instanceof Error ? e.message : "服务异常") })); }
     finally { setLoading(false); }
   }
   return <section className="chat-page"><div className="conversation">
     {!messages.length && <div className="hero"><div className="orb"><Sparkles/></div><span>ENTERPRISE RAG AGENT</span><h2>让企业知识，真正参与决策</h2><p>检索增强、智能规划、工具调用与长期记忆，在一个可观测的 Agent 工作流中协同。</p><div className="prompts">{prompts.map((p) => <button key={p} onClick={() => send(p)}>{p}<ChevronRight/></button>)}</div></div>}
-    {messages.map((m, i) => <div key={i} className={`message ${m.role}`}><div className="avatar">{m.role === "user" ? "YOU" : <Bot/>}</div><div className="bubble">{m.events && <AgentSteps events={m.events}/>}<div className="answer">{m.content}</div>{m.events?.map((event) => event.type === "answer" && event.citations.length > 0 ? <div className="citations" key="citations"><small>参考资料</small>{event.citations.map((c, j) => <div key={c.chunkId}><b>[{j + 1}] {c.title}</b><span>{Math.round(c.score * 100)}% 匹配</span></div>)}</div> : null)}</div></div>)}
-    {loading && <div className="thinking"><LoaderCircle/> Agent 正在规划并检索知识…</div>}
+    {messages.map((m) => <div key={m.id} className={`message ${m.role}`}><div className="avatar">{m.role === "user" ? "YOU" : <Bot/>}</div><div className="bubble">{m.events && m.events.length > 0 && <AgentSteps events={m.events}/>}<div className={m.streaming ? "answer streaming" : "answer"}>{m.content || "正在连接 Agent…"}</div>{m.events?.map((event) => event.type === "answer" && event.citations.length > 0 ? <div className="citations" key="citations"><small>参考资料</small>{event.citations.map((c, j) => <div key={c.chunkId}><b>[{j + 1}] {c.title}</b><span>{Math.round(c.score * 100)}% 匹配</span></div>)}</div> : null)}</div></div>)}
+    {loading && !messages.at(-1)?.content && <div className="thinking"><LoaderCircle/> Agent 正在规划并检索知识…</div>}
   </div><div className="composer"><div><textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }}} placeholder="询问你的业务知识…"/><button onClick={() => send()} disabled={loading || !input.trim()}><Send/></button></div><small>答案由 AI 生成，请结合引用资料判断 · Enter 发送 / Shift + Enter 换行</small></div></section>;
 }
 

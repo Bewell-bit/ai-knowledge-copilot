@@ -22,9 +22,28 @@ test("RAG ranks matching business knowledge", () => {
 test("agent plans, uses retrieval tool and writes memory", async () => {
   const db = createDatabase(":memory:");
   insertDocument(db, { title: "安全", content: "涉及高风险操作时必须转人工复核并记录工具调用。" });
-  const fake: LlmClient = { complete: async (_messages, context) => `引用了 ${context.length} 条资料` };
+  const fake: LlmClient = {
+    async *stream(_messages, context) { yield "引用了 "; yield `${context.length} 条资料`; },
+    complete: async (_messages, context) => `引用了 ${context.length} 条资料`
+  };
   const agent = new KnowledgeAgent(db, fake);
   const events = await agent.run("session-1", "高风险操作怎么办");
   assert.deepEqual(events.map((e) => e.type), ["plan", "tool", "answer"]);
   assert.equal(agent.getHistory("session-1").length, 2);
+});
+
+test("agent streams plan, tool, deltas and completion in order", async () => {
+  const db = createDatabase(":memory:");
+  insertDocument(db, { title: "会员", content: "年度会员包含高清视频、专属客服和每月十次免费下载权益。" });
+  const fake: LlmClient = {
+    async *stream() { yield "年度会员"; yield "包含专属客服"; },
+    complete: async () => "年度会员包含专属客服"
+  };
+  const agent = new KnowledgeAgent(db, fake);
+  const events = [];
+  for await (const event of agent.stream("stream-session", "年度会员权益")) events.push(event);
+  assert.deepEqual(events.map((event) => event.type), ["plan", "tool", "delta", "delta", "done"]);
+  const done = events.at(-1);
+  assert.equal(done?.type === "done" ? done.content : "", "年度会员包含专属客服");
+  assert.equal(agent.getHistory("stream-session").length, 2);
 });
