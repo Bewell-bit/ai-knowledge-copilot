@@ -3,12 +3,18 @@ export class TtlCache<T> {
   constructor(private ttlMs = 60_000, private maxSize = 200) {}
   get(key: string) {
     const hit = this.values.get(key);
-    if (!hit || hit.expires < Date.now()) { this.values.delete(key); return undefined; }
+    if (!hit || hit.expires < Date.now()) {
+      this.values.delete(key);
+      return undefined;
+    }
     return hit.value;
   }
   set(key: string, value: T) {
-    if (this.values.size >= this.maxSize) this.values.delete(this.values.keys().next().value as string);
+    if (this.values.size >= this.maxSize)
+      this.values.delete(this.values.keys().next().value as string);
     this.values.set(key, { value, expires: Date.now() + this.ttlMs });
   }
-  get size() { return this.values.size; }
+  get size() {
+    return this.values.size;
+  }
 }

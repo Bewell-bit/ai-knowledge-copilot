@@ -2,7 +2,10 @@
   "name": "ai-knowledge-copilot",
   "version": "1.0.0",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "concurrently -n api,web -c cyan,magenta \"pnpm --filter @copilot/api dev\" \"pnpm --filter @copilot/web dev\"",
     "build": "pnpm --filter @copilot/api build && pnpm --filter @copilot/web build",
@@ -10,7 +13,15 @@
     "typecheck": "pnpm --filter @copilot/api typecheck && pnpm --filter @copilot/web typecheck",
     "start": "pnpm --filter @copilot/api start"
   },
-  "engines": { "node": ">=22.5 <23" },
-  "pnpm": { "onlyBuiltDependencies": ["esbuild"] },
-  "devDependencies": { "concurrently": "^8.2.2" }
+  "engines": {
+    "node": ">=22.5 <23"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
 }

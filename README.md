@@ -56,14 +56,14 @@ pnpm build      # 生产构建
 
 ## API
 
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `POST` | `/api/chat` | 执行多 Agent 图并返回 agent/tool/answer 事件 |
-| `POST` | `/api/chat/stream` | 通过 SSE 流式返回 plan/agent/tool/delta/done 事件 |
-| `GET/POST` | `/api/documents` | 查询或写入知识文档 |
-| `GET` | `/api/search?q=` | 独立验证 RAG 检索结果 |
-| `GET` | `/api/traces` | 最近 20 条调用链路 |
-| `GET` | `/api/metrics` | Agent 与知识库指标 |
+| Method     | Endpoint           | Description                                       |
+| ---------- | ------------------ | ------------------------------------------------- |
+| `POST`     | `/api/chat`        | 执行多 Agent 图并返回 agent/tool/answer 事件      |
+| `POST`     | `/api/chat/stream` | 通过 SSE 流式返回 plan/agent/tool/delta/done 事件 |
+| `GET/POST` | `/api/documents`   | 查询或写入知识文档                                |
+| `GET`      | `/api/search?q=`   | 独立验证 RAG 检索结果                             |
+| `GET`      | `/api/traces`      | 最近 20 条调用链路                                |
+| `GET`      | `/api/metrics`     | Agent 与知识库指标                                |
 
 ## 面试演示路径
 

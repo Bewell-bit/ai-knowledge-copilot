@@ -8,7 +8,7 @@ const schema = z.object({
   LLM_PROVIDER: z.enum(["demo", "openai"]).default("demo"),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
-  OPENAI_MODEL: z.string().default("gpt-4o-mini")
+  OPENAI_MODEL: z.string().default("gpt-4o-mini"),
 });
 
 export const config = schema.parse(process.env);
