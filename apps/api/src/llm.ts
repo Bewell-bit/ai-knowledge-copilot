@@ -1,0 +1,41 @@
+import { config } from "./config.js";
+import type { ChatMessage, Citation } from "./types.js";
+
+export interface LlmClient {
+  complete(messages: ChatMessage[], context: Citation[]): Promise<string>;
+}
+
+class DemoLlm implements LlmClient {
+  async complete(messages: ChatMessage[], context: Citation[]) {
+    const query = messages.at(-1)?.content ?? "";
+    if (!context.length) {
+      return `知识库中暂时没有找到与“${query}”直接相关的内容。建议补充业务文档后重试，或转人工确认，避免给出未经验证的结论。`;
+    }
+    const evidence = context.slice(0, 3).map((item, index) => `${index + 1}. ${item.content}`).join("\n");
+    return `根据当前知识库，可以这样处理：\n\n${evidence}\n\n以上结论来自已检索的业务资料；如涉及高金额、隐私或高风险操作，请按规范转人工复核。`;
+  }
+}
+
+class OpenAiCompatibleLlm implements LlmClient {
+  async complete(messages: ChatMessage[], context: Citation[]) {
+    if (!config.OPENAI_API_KEY) throw new Error("使用 openai 模式时必须配置 OPENAI_API_KEY");
+    const response = await fetch(`${config.OPENAI_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: config.OPENAI_MODEL,
+        temperature: 0.2,
+        messages: [
+          { role: "system", content: "你是企业知识助手。仅基于给定资料回答；资料不足时明确说明。引用资料编号，禁止编造。" },
+          ...messages,
+          { role: "user", content: `检索资料：\n${context.map((c, i) => `[${i + 1}] ${c.title}: ${c.content}`).join("\n")}` }
+        ]
+      })
+    });
+    if (!response.ok) throw new Error(`LLM 请求失败: ${response.status}`);
+    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    return data.choices?.[0]?.message?.content ?? "模型未返回内容";
+  }
+}
+
+export const llm: LlmClient = config.LLM_PROVIDER === "openai" ? new OpenAiCompatibleLlm() : new DemoLlm();

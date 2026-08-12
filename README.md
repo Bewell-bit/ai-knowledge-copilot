@@ -1,0 +1,92 @@
+# Nexus AI Knowledge Copilot
+
+一个面向企业业务场景的全栈 AI 知识助手作品：覆盖知识入库、RAG 检索、Agent Planning / Tool Use / Memory、模型接入、调用追踪与性能观测。项目默认无需 API Key 即可完整演示，也支持切换 OpenAI-compatible 模型。
+
+## 能力地图
+
+```text
+React 工作台 ── REST API ── Knowledge Agent
+                              ├── Planner
+                              ├── knowledge_search 工具 ── 文档切片 / 混合词元检索
+                              ├── LLM Adapter ── Demo / OpenAI-compatible
+                              ├── Session Memory ── SQLite WAL
+                              └── Trace & Metrics ── 延迟 / 工具调用 / 缓存
+```
+
+- **全栈交付**：React + TypeScript + Vite 前端，Express + Zod 后端，SQLite 关系型数据层。
+- **RAG**：中文字符与英文词元混合检索、相关度打分、Top-K 召回、引用溯源。
+- **Agent**：显式规划、工具调用、会话记忆与回答合成；接口设计可继续扩展多工具节点。
+- **工程能力**：Monorepo、严格类型检查、参数校验、统一异常处理、事务与 WAL、TTL 缓存、单元测试。
+- **可观测性**：每次调用记录 Query、Latency、Tool Calls，并在 Dashboard 展示。
+- **模型可替换**：通过 Adapter 接入 OpenAI、DeepSeek、Qwen 等兼容 Chat Completions 的服务。
+
+## 快速启动
+
+环境要求：Node.js 22.5+。项目包含 `.nvmrc`，推荐直接执行：
+
+```bash
+nvm use
+```
+
+```bash
+pnpm install
+cp .env.example .env
+pnpm dev
+```
+
+访问 http://localhost:5173，API 位于 http://localhost:8787。
+
+项目默认 `LLM_PROVIDER=demo`。接入真实模型时修改 `.env`：
+
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=your-key
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+```
+
+## 工程命令
+
+```bash
+pnpm test       # Agent、RAG、切片单元测试
+pnpm typecheck  # 全栈严格类型检查
+pnpm build      # 生产构建
+```
+
+## API
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/api/chat` | 执行 Agent 并返回 plan/tool/answer 事件 |
+| `GET/POST` | `/api/documents` | 查询或写入知识文档 |
+| `GET` | `/api/search?q=` | 独立验证 RAG 检索结果 |
+| `GET` | `/api/traces` | 最近 20 条调用链路 |
+| `GET` | `/api/metrics` | Agent 与知识库指标 |
+
+## 面试演示路径
+
+1. 从“知识库”添加一条新的业务规范，说明切片、索引和持久化流程。
+2. 在“智能问答”提出与规范相关的问题，展示 Planning、Tool Use 和引用来源。
+3. 重复提问，说明 TTL 缓存带来的延迟优化。
+4. 打开“运行观测”，展示 Trace、工具调用数和平均延迟。
+5. 讲解真实生产演进：将本地检索替换为 pgvector / Elasticsearch，将内存缓存替换为 Redis，将耗时入库任务投递到 Kafka / RabbitMQ，并在 Agent 层加入 LangGraph 状态机与离线评测集。
+
+## 生产化演进设计
+
+- **分布式**：API 无状态化；Redis 共享缓存与限流；对象存储保存原始文档。
+- **异步化**：文档解析、Embedding、索引构建进入消息队列，消费端幂等写入。
+- **检索质量**：向量召回 + BM25 + Reranker，按租户隔离索引并增加权限过滤。
+- **Agent 质量**：构建黄金评测集，持续衡量 faithfulness、context recall、任务成功率、成本和 P95 延迟。
+- **安全**：Prompt Injection 检测、PII 脱敏、工具权限白名单、全链路审计与人工兜底。
+
+## 项目结构
+
+```text
+apps/web/             React 智能问答、知识库、观测工作台
+apps/api/src/agent.ts Agent 编排、Memory、Trace 与 Cache
+apps/api/src/rag.ts   检索与相关度排序
+apps/api/src/llm.ts   模型适配层
+apps/api/src/db.ts    SQLite Schema、事务、切片与知识入库
+```
+
+本项目适合作为继续迭代的作品集基线：后续可加入文件解析、流式 SSE、多租户 RBAC、Embedding 服务、LangGraph 多 Agent 以及 RAGAS 自动评测。
