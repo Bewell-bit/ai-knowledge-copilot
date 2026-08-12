@@ -5,18 +5,18 @@
 ## 能力地图
 
 ```text
-React 工作台 ── REST API ── Knowledge Agent
-                              ├── Planner
-                              ├── knowledge_search 工具 ── 文档切片 / 混合词元检索
-                              ├── LLM Adapter ── Demo / OpenAI-compatible
-                              ├── Session Memory ── SQLite WAL
-                              └── Trace & Metrics ── 延迟 / 工具调用 / 缓存
+React 工作台 ── REST / SSE API ── LangGraph Supervisor
+                                    ├── Retrieval Agent ── RAG / knowledge_search
+                                    ├── Analyst Agent ── Demo / OpenAI-compatible LLM
+                                    ├── Reviewer Agent ── 质量审查 / 有限重试
+                                    ├── Session Memory ── SQLite WAL
+                                    └── Trace & Metrics ── 延迟 / 工具调用 / 缓存
 ```
 
 - **全栈交付**：React + TypeScript + Vite 前端，Express + Zod 后端，SQLite 关系型数据层。
 - **RAG**：中文字符与英文词元混合检索、相关度打分、Top-K 召回、引用溯源。
-- **Agent**：显式规划、工具调用、会话记忆与回答合成；接口设计可继续扩展多工具节点。
-- **流式交互**：SSE 按 `plan → tool → delta → done` 实时推送，支持心跳、断连取消、引用与最终 Trace 落库。
+- **LangGraph 多 Agent**：Supervisor 路由，Retrieval 检索，Analyst 分析，Reviewer 审查；审查失败通过条件边触发有限重试。
+- **流式交互**：SSE 按 `plan → agent/tool → delta → done` 实时推送，支持心跳、断连取消、引用与最终 Trace 落库。
 - **工程能力**：Monorepo、严格类型检查、参数校验、统一异常处理、事务与 WAL、TTL 缓存、单元测试。
 - **可观测性**：每次调用记录 Query、Latency、Tool Calls，并在 Dashboard 展示。
 - **模型可替换**：通过 Adapter 接入 OpenAI、DeepSeek、Qwen 等兼容 Chat Completions 的服务。
@@ -58,8 +58,8 @@ pnpm build      # 生产构建
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `POST` | `/api/chat` | 执行 Agent 并返回 plan/tool/answer 事件 |
-| `POST` | `/api/chat/stream` | 通过 SSE 流式返回 plan/tool/delta/done 事件 |
+| `POST` | `/api/chat` | 执行多 Agent 图并返回 agent/tool/answer 事件 |
+| `POST` | `/api/chat/stream` | 通过 SSE 流式返回 plan/agent/tool/delta/done 事件 |
 | `GET/POST` | `/api/documents` | 查询或写入知识文档 |
 | `GET` | `/api/search?q=` | 独立验证 RAG 检索结果 |
 | `GET` | `/api/traces` | 最近 20 条调用链路 |
@@ -68,10 +68,10 @@ pnpm build      # 生产构建
 ## 面试演示路径
 
 1. 从“知识库”添加一条新的业务规范，说明切片、索引和持久化流程。
-2. 在“智能问答”提出与规范相关的问题，展示 Planning、Tool Use 和引用来源。
+2. 在“智能问答”提出与规范相关的问题，展示 Supervisor 路由、三个专业 Agent、工具调用和引用来源。
 3. 重复提问，说明 TTL 缓存带来的延迟优化。
 4. 打开“运行观测”，展示 Trace、工具调用数和平均延迟。
-5. 讲解真实生产演进：将本地检索替换为 pgvector / Elasticsearch，将内存缓存替换为 Redis，将耗时入库任务投递到 Kafka / RabbitMQ，并在 Agent 层加入 LangGraph 状态机与离线评测集。
+5. 讲解真实生产演进：将本地检索替换为 pgvector / Elasticsearch，将内存缓存替换为 Redis，将耗时入库任务投递到 Kafka / RabbitMQ，并为 LangGraph 加入持久化 Checkpoint 与离线评测集。
 
 ## 生产化演进设计
 
@@ -86,9 +86,10 @@ pnpm build      # 生产构建
 ```text
 apps/web/             React 智能问答、知识库、观测工作台
 apps/api/src/agent.ts Agent 编排、Memory、Trace 与 Cache
+apps/api/src/multi-agent.ts LangGraph 状态、节点、条件边与质量回路
 apps/api/src/rag.ts   检索与相关度排序
 apps/api/src/llm.ts   模型适配层
 apps/api/src/db.ts    SQLite Schema、事务、切片与知识入库
 ```
 
-本项目适合作为继续迭代的作品集基线：后续可加入文件解析、流式 SSE、多租户 RBAC、Embedding 服务、LangGraph 多 Agent 以及 RAGAS 自动评测。
+本项目适合作为继续迭代的作品集基线：后续可加入文件解析、多租户 RBAC、Embedding 服务、LangGraph 持久化 Checkpoint 以及 RAGAS 自动评测。

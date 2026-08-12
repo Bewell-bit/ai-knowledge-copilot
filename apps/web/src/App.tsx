@@ -42,7 +42,7 @@ function Chat() {
     const updateAssistant = (update: (message: Conversation) => Conversation) => setMessages((old) => old.map((message) => message.id === assistantId ? update(message) : message));
     try {
       await api.streamChat(sessionId, text, (event) => {
-        if (event.type === "plan" || event.type === "tool") updateAssistant((message) => ({ ...message, events: [...(message.events ?? []), event] }));
+        if (event.type === "plan" || event.type === "tool" || event.type === "agent") updateAssistant((message) => ({ ...message, events: [...(message.events ?? []), event] }));
         if (event.type === "delta") updateAssistant((message) => ({ ...message, content: message.content + event.content }));
         if (event.type === "done") updateAssistant((message) => ({ ...message, content: event.content, streaming: false, events: [...(message.events ?? []), { type: "answer", content: event.content, citations: event.citations, latencyMs: event.latencyMs }] }));
       });
@@ -58,8 +58,11 @@ function Chat() {
 }
 
 function AgentSteps({ events }: { events: AgentEvent[] }) {
-  const plan = events.find((e) => e.type === "plan"); const tool = events.find((e) => e.type === "tool"); const answer = events.find((e) => e.type === "answer");
-  return <div className="steps"><div><span><Workflow/></span><p><b>Planning</b><small>{plan?.type === "plan" ? plan.content : "完成"}</small></p><Check/></div><div><span><Search/></span><p><b>Tool Use · knowledge_search</b><small>{tool?.type === "tool" ? tool.output : "完成"}</small></p><Check/></div><div><span><Sparkles/></span><p><b>Answer</b><small>{answer?.type === "answer" ? `${answer.latencyMs}ms · ${answer.citations.length} 条引用` : "完成"}</small></p><Check/></div></div>;
+  const agents = events.filter((event) => event.type === "agent");
+  const answer = events.find((event) => event.type === "answer");
+  const labels = { supervisor: "Supervisor", retrieval: "Retrieval Agent", analyst: "Analyst Agent", reviewer: "Reviewer Agent" } as const;
+  const icons = { supervisor: <Workflow/>, retrieval: <Search/>, analyst: <BrainCircuit/>, reviewer: <Check/> } as const;
+  return <div className="steps multi-agent"><div className="graph-title"><span><Workflow/></span><p><b>LangGraph Multi-Agent</b><small>条件路由 · 有限质量回路</small></p></div>{agents.map((event, index) => event.type === "agent" ? <div key={`${event.role}-${index}`}><span>{icons[event.role]}</span><p><b>{labels[event.role]}</b><small>{event.summary}</small></p><Check/></div> : null)}{answer?.type === "answer" && <div><span><Sparkles/></span><p><b>Final Answer</b><small>{answer.latencyMs}ms · {answer.citations.length} 条引用</small></p><Check/></div>}</div>;
 }
 
 function Knowledge() {

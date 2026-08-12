@@ -4,12 +4,17 @@ import type { AgentEvent, AgentStreamEvent, ChatMessage } from "./types.js";
 import type { LlmClient } from "./llm.js";
 import { RagService } from "./rag.js";
 import { TtlCache } from "./cache.js";
+import { MultiAgentGraph } from "./multi-agent.js";
 
 export class KnowledgeAgent {
   private rag: RagService;
+  private multiAgent: MultiAgentGraph;
   private cache = new TtlCache<AgentEvent[]>(120_000);
 
-  constructor(private db: Db, private model: LlmClient) { this.rag = new RagService(db); }
+  constructor(private db: Db, private model: LlmClient) {
+    this.rag = new RagService(db);
+    this.multiAgent = new MultiAgentGraph(this.rag, model);
+  }
 
   getHistory(sessionId: string): ChatMessage[] {
     return this.db.getHistory(sessionId);
@@ -18,7 +23,7 @@ export class KnowledgeAgent {
   async run(sessionId: string, query: string): Promise<AgentEvent[]> {
     const events: AgentEvent[] = [];
     for await (const event of this.stream(sessionId, query)) {
-      if (event.type === "plan" || event.type === "tool") events.push(event);
+      if (event.type === "plan" || event.type === "tool" || event.type === "agent") events.push(event);
       if (event.type === "done") events.push({ type: "answer", content: event.content, citations: event.citations, latencyMs: event.latencyMs });
     }
     return events;
@@ -39,19 +44,31 @@ export class KnowledgeAgent {
     }
 
     const history = this.getHistory(sessionId);
-    const plan = { type: "plan" as const, content: "理解问题 → 检索业务知识库 → 评估证据充分性 → 生成可追溯回答" };
+    const plan = { type: "plan" as const, content: "Supervisor 路由 → Retrieval 检索 → Analyst 分析 → Reviewer 质量审查" };
     yield plan;
-    const citations = this.rag.search(query);
-    const tool = { type: "tool" as const, name: "knowledge_search", input: { query, topK: 4 }, output: citations.length ? `找到 ${citations.length} 条相关资料` : "未找到相关资料" };
-    yield tool;
-
+    const graphEvents: AgentEvent[] = [plan];
+    let citations = [] as ReturnType<RagService["search"]>;
     let answerText = "";
-    for await (const content of this.model.stream([...history, { role: "user", content: query }], citations, signal)) {
-      if (signal?.aborted) return;
-      answerText += content;
-      yield { type: "delta", content };
+    let retrievalCalls = 0;
+    for await (const update of this.multiAgent.stream({ query, history }, signal)) {
+      const agentEvent = { type: "agent" as const, role: update.role, status: update.status, summary: update.summary };
+      graphEvents.push(agentEvent);
+      yield agentEvent;
+      if (update.role === "retrieval") {
+        citations = update.state.citations ?? citations;
+        retrievalCalls += 1;
+        const tool = { type: "tool" as const, name: "knowledge_search", input: { query, topK: citations.length }, output: update.summary };
+        graphEvents.push(tool);
+        yield tool;
+      }
+      if (update.role === "analyst") answerText = update.state.draft ?? answerText;
     }
     if (signal?.aborted) return;
+
+    for (const content of this.splitAnswer(answerText, 12)) {
+      yield { type: "delta", content };
+      await new Promise((resolve) => setTimeout(resolve, 12));
+    }
 
     const latencyMs = Date.now() - started;
     const answer: AgentEvent = { type: "answer", content: answerText, citations, latencyMs };
@@ -59,8 +76,8 @@ export class KnowledgeAgent {
     this.db.addConversation([
       { id: randomUUID(), sessionId, role: "user", content: query, createdAt: now },
       { id: randomUUID(), sessionId, role: "assistant", content: answerText, createdAt: new Date(Date.now() + 1).toISOString() }
-    ], { id: randomUUID(), sessionId, query, answer: answerText, latencyMs, toolCalls: 1, createdAt: now });
-    this.cache.set(cacheKey, [plan, tool, answer]);
+    ], { id: randomUUID(), sessionId, query, answer: answerText, latencyMs, toolCalls: retrievalCalls, createdAt: now });
+    this.cache.set(cacheKey, [...graphEvents, answer]);
     yield { type: "done", content: answerText, citations, latencyMs, cached: false };
   }
 
