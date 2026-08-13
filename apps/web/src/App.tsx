@@ -1,3 +1,4 @@
+"use client";
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
@@ -25,6 +26,7 @@ import {
   type Metrics,
   type Trace,
 } from "./api";
+import type { Role } from "../auth";
 
 type Page = "chat" | "knowledge" | "observability";
 type Conversation = {
@@ -41,7 +43,7 @@ const prompts = [
 ];
 const sessionId = crypto.randomUUID();
 
-function App() {
+function App({ user }: { user: { name: string; role: Role } }) {
   const [page, setPage] = useState<Page>("chat");
   const [mobileNav, setMobileNav] = useState(false);
   const nav = (next: Page) => {
@@ -95,13 +97,13 @@ function App() {
             <i /> All systems operational
           </p>
         </div>
-        <div className="profile">
-          <div>AI</div>
+        <a className="profile" href="/api/auth/signout">
+          <div>{user.name.slice(0, 1)}</div>
           <span>
-            <b>Builder Mode</b>
-            <small>Demo Provider</small>
+            <b>{user.name}</b>
+            <small>{user.role.toUpperCase()} · 点击退出</small>
           </span>
-        </div>
+        </a>
       </aside>
       <main>
         <header>
@@ -129,7 +131,7 @@ function App() {
           </span>
         </header>
         {page === "chat" && <Chat />}
-        {page === "knowledge" && <Knowledge />}
+        {page === "knowledge" && <Knowledge role={user.role} />}
         {page === "observability" && <Observability />}
       </main>
     </div>
@@ -344,7 +346,7 @@ function AgentSteps({ events }: { events: AgentEvent[] }) {
   );
 }
 
-function Knowledge() {
+function Knowledge({ role }: { role: Role }) {
   const [docs, setDocs] = useState<Document[]>([]);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ title: "", source: "", content: "" });
@@ -371,10 +373,7 @@ function Knowledge() {
           <Search />
           <input placeholder="搜索知识文档…" />
         </div>
-        <button className="primary" onClick={() => setModal(true)}>
-          <FilePlus2 />
-          添加文档
-        </button>
+        {role !== "viewer" ? <button className="primary" onClick={() => setModal(true)}><FilePlus2 />添加文档</button> : <span className="role-badge">VIEW ONLY</span>}
       </div>
       <div className="stat-row">
         <Stat icon={<BookOpen />} label="文档总数" value={docs.length} />

@@ -67,7 +67,7 @@ async function streamChat(
   onEvent: (event: AgentStreamEvent) => void,
   signal?: AbortSignal
 ) {
-  const response = await fetch("/api/chat/stream", {
+  const response = await fetch("/api/backend/chat/stream", {
     method: "POST",
     signal,
     headers: {
@@ -109,14 +109,14 @@ async function streamChat(
 }
 export const api = {
   chat: (sessionId: string, message: string) =>
-    request<{ events: AgentEvent[] }>("/api/chat", {
+    request<{ events: AgentEvent[] }>("/api/backend/chat", {
       method: "POST",
       body: JSON.stringify({ sessionId, message }),
     }),
   streamChat,
-  documents: () => request<Document[]>("/api/documents"),
+  documents: () => request<Document[]>("/api/backend/documents"),
   addDocument: (data: { title: string; source: string; content: string }) =>
-    request("/api/documents", { method: "POST", body: JSON.stringify(data) }),
-  metrics: () => request<Metrics>("/api/metrics"),
-  traces: () => request<Trace[]>("/api/traces"),
+    request("/api/backend/documents", { method: "POST", body: JSON.stringify(data) }),
+  metrics: () => request<Metrics>("/api/backend/metrics"),
+  traces: () => request<Trace[]>("/api/backend/traces"),
 };

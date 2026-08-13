@@ -14,13 +14,16 @@
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant W as React Web
+  participant W as Next.js Web
+  participant B as Authenticated BFF
   participant A as Agent API
   participant R as RAG Tool
   participant M as LLM Adapter
   participant D as SQLite
   U->>W: 输入业务问题
-  W->>A: POST /api/chat/stream
+  W->>B: POST /api/backend/chat/stream
+  B->>B: Auth.js Session + RBAC
+  B->>A: POST /api/chat/stream
   A->>D: 读取 Session Memory
   A->>R: knowledge_search(query)
   R->>D: 读取并排序 Chunks
@@ -28,8 +31,16 @@ sequenceDiagram
   A->>M: history + evidence
   M-->>A: grounded answer
   A->>D: 写入 Memory + Trace
-  A-->>W: plan/agent/tool/delta/done events
+  A-->>B: SSE stream
+  B-->>W: plan/agent/tool/delta/done events
 ```
+
+## Next.js BFF 与 RBAC
+
+- App Router 的 Server Component 在进入工作台前读取 Session。
+- Middleware 拦截未登录页面访问；BFF Route Handler 对每个数据请求再次鉴权。
+- `viewer` 只能查看和问答，`editor` 可维护知识，`admin` 保留完整权限。
+- 浏览器无法直接获知内部 Agent API 地址；SSE `ReadableStream` 经 BFF 透传，不进行服务端聚合。
 
 ## LangGraph 多 Agent 状态图
 

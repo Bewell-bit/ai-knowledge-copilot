@@ -5,7 +5,10 @@
 ## 能力地图
 
 ```text
-React 工作台 ── REST / SSE API ── LangGraph Supervisor
+Next.js App Router ── Auth.js / RBAC ── BFF Route Handlers
+                                             │ REST / SSE proxy
+                                             ▼
+                                   LangGraph Supervisor
                                     ├── Retrieval Agent ── RAG / knowledge_search
                                     ├── Analyst Agent ── Demo / OpenAI-compatible LLM
                                     ├── Reviewer Agent ── 质量审查 / 有限重试
@@ -13,7 +16,9 @@ React 工作台 ── REST / SSE API ── LangGraph Supervisor
                                     └── Trace & Metrics ── 延迟 / 工具调用 / 缓存
 ```
 
-- **全栈交付**：React + TypeScript + Vite 前端，Express + Zod 后端，SQLite 关系型数据层。
+- **全栈交付**：Next.js App Router + TypeScript Web/BFF，Express + Zod AI Runtime，SQLite 关系型数据层。
+- **认证与权限**：Auth.js JWT Session、Middleware 页面保护，以及 `admin/editor/viewer` 服务端 RBAC。
+- **BFF 架构**：Next Route Handlers 隔离内部 Agent API，并原样透传 LangGraph SSE 流。
 - **RAG**：中文字符与英文词元混合检索、相关度打分、Top-K 召回、引用溯源。
 - **LangGraph 多 Agent**：Supervisor 路由，Retrieval 检索，Analyst 分析，Reviewer 审查；审查失败通过条件边触发有限重试。
 - **流式交互**：SSE 按 `plan → agent/tool → delta → done` 实时推送，支持心跳、断连取消、引用与最终 Trace 落库。
@@ -32,10 +37,19 @@ nvm use
 ```bash
 pnpm install
 cp .env.example .env
+cp apps/web/.env.example apps/web/.env.local
 pnpm dev
 ```
 
-访问 http://localhost:5173，API 位于 http://localhost:8787。
+访问 http://localhost:3000，内部 Agent API 位于 http://localhost:8787。浏览器只访问经过鉴权的 Next BFF。
+
+演示账号为 `admin`、`editor`、`viewer`，默认密码均为 `nexus2026`，可通过 `apps/web/.env.local` 修改。生产部署必须替换 `AUTH_SECRET` 与演示密码。
+
+| Role | 问答/查看 | 添加知识 | 管理能力 |
+| --- | --- | --- | --- |
+| `viewer` | ✅ | ❌ | ❌ |
+| `editor` | ✅ | ✅ | ❌ |
+| `admin` | ✅ | ✅ | ✅ |
 
 项目默认 `LLM_PROVIDER=demo`。接入真实模型时修改 `.env`：
 
@@ -65,7 +79,7 @@ pnpm build      # 生产构建
 | `GET`      | `/api/traces`      | 最近 20 条调用链路                                |
 | `GET`      | `/api/metrics`     | Agent 与知识库指标                                |
 
-## 面试演示路径
+## 演示路径
 
 1. 从“知识库”添加一条新的业务规范，说明切片、索引和持久化流程。
 2. 在“智能问答”提出与规范相关的问题，展示 Supervisor 路由、三个专业 Agent、工具调用和引用来源。
@@ -84,7 +98,8 @@ pnpm build      # 生产构建
 ## 项目结构
 
 ```text
-apps/web/             React 智能问答、知识库、观测工作台
+apps/web/app/         Next.js App Router、Auth API 与鉴权 BFF
+apps/web/src/         智能问答、知识库、观测客户端组件
 apps/api/src/agent.ts Agent 编排、Memory、Trace 与 Cache
 apps/api/src/multi-agent.ts LangGraph 状态、节点、条件边与质量回路
 apps/api/src/rag.ts   检索与相关度排序
